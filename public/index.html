@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0a0d10; --panel:#12171b; --line:#232c33; --text:#e9edf0; --muted:#8fa0aa; --accent:#4fd1c5; }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:"Space Grotesk",system-ui,sans-serif;}
+  .wrap{max-width:560px; margin:0 auto; padding:56px 20px;}
+  h1{font-size:30px; margin:0 0 10px;}
+  p.sub{color:var(--muted); font-size:15px; line-height:1.6;}
+  .drop{border:1.5px dashed var(--line); border-radius:14px; background:var(--panel); padding:40px 24px; text-align:center; cursor:pointer; margin-top:24px;}
+  .drop.drag{border-color:var(--accent);}
+  input[type=file]{display:none;}
+  .opt{display:flex; justify-content:space-between; align-items:center; margin-top:16px; font-size:14px;}
+  input[type=range]{width:160px; accent-color:var(--accent);}
+  button{width:100%; margin-top:20px; padding:14px; border-radius:9px; border:none; background:var(--accent); color:#08201d; font-weight:600; font-size:15px; cursor:pointer;}
+  button:disabled{opacity:.5;}
+  .status{margin-top:16px; font-size:13.5px; color:var(--muted); text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Video Optimizer</h1>
+  <p class="sub">Upload your video and we'll re-encode it at a clean, high bitrate before you post — a better starting point for any platform's own compression.</p>
+
+  <div id="drop" class="drop">
+    <p id="drop-text">Drop a video here, or click to choose one</p>
+    <input id="file" type="file" accept="video/*">
+  </div>
+
+  <div class="opt">
+    <label for="bitrate">Target bitrate</label>
+    <span><input type="range" id="bitrate" min="6" max="50" value="20"> <span id="bitrate-val">20 Mbps</span></span>
+  </div>
+
+  <button id="go" disabled>Optimize video</button>
+  <p class="status" id="status"></p>
+</div>
+
+<script>
+  const dropEl = document.getElementById('drop');
+  const fileInput = document.getElementById('file');
+  const dropText = document.getElementById('drop-text');
+  const bitrateEl = document.getElementById('bitrate');
+  const bitrateVal = document.getElementById('bitrate-val');
+  const goBtn = document.getElementById('go');
+  const statusEl = document.getElementById('status');
+  let file = null;
+
+  bitrateEl.addEventListener('input', () => bitrateVal.textContent = bitrateEl.value + ' Mbps');
+  dropEl.addEventListener('click', () => fileInput.click());
+  ['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove('drag'); }));
+  dropEl.addEventListener('drop', e => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+  function setFile(f){ file = f; dropText.textContent = f.name; goBtn.disabled = false; }
+
+  goBtn.addEventListener('click', async () => {
+    if (!file) return;
+    goBtn.disabled = true;
+    statusEl.textContent = 'Uploading and processing — this can take a bit depending on file size…';
+    const fd = new FormData();
+    fd.append('video', file);
+    fd.append('bitrate', bitrateEl.value);
+    try {
+      const res = await fetch('/process', { method: 'POST', body: fd });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ('HTTP ' + res.status));
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'optimized.mp4';
+      document.body.appendChild(a); a.click(); a.remove();
+      statusEl.textContent = 'Done — download started.';
+    } catch (err){
+      statusEl.textContent = 'Error: ' + err.message;
+    } finally {
+      goBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
